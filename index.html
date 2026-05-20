@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>채용 및 처우 분석 대시보드</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 p-6">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-2xl shadow-sm gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">◈ Recruitment & Offer Dashboard</h1>
+                <p class="text-sm text-gray-500 mt-1">지정된 구글 시트 데이터 기반 실시간 분석 (신입 인상률 제외 처리)</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="https://docs.google.com/spreadsheets/d/11vNiuXWR1B-0-w_hOUfEK1ba3AVD6iQKujei86K8_jU/edit?usp=sharing" 
+                   target="_blank" 
+                   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors flex items-center gap-1">
+                    ✏️ 구글 시트 열기 (데이터 편집)
+                </a>
+                <span id="sync-status" class="bg-amber-50 text-amber-600 px-4 py-2 rounded-full text-xs font-semibold">로딩 중...</span>
+            </div>
+        </header>
+
+        <section class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <p class="text-xs font-medium text-gray-400 uppercase">분석 대상 인원</p>
+                <p class="text-3xl font-bold text-gray-900 mt-2" id="kpi-total">0명</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <p class="text-xs font-medium text-gray-400 uppercase">평균 경력</p>
+                <p class="text-3xl font-bold text-purple-600 mt-2" id="kpi-avg-exp">0년</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <p class="text-xs font-medium text-gray-400 uppercase">평균 입사 연봉</p>
+                <p class="text-3xl font-bold text-blue-600 mt-2" id="kpi-avg-salary">0만원</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <p class="text-xs font-medium text-gray-400 uppercase">평균 연봉 인상률 <span class="text-[10px] text-gray-400 font-normal">(신입 제외)</span></p>
+                <p class="text-3xl font-bold text-green-600 mt-2" id="kpi-avg-increase">0.00%</p>
+            </div>
+        </section>
+
+        <section class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+            <h3 class="text-md font-semibold text-gray-900 mb-3">🔍 특정 부서/직군 & 경력별 평균 연봉 검색기</h3>
+            <p class="text-xs text-gray-400 mb-4">원하는 부서와 경력을 입력하면 데이터 속 실시간 평균 연봉을 계산해 줍니다.</p>
+            <div class="flex flex-wrap items-center gap-4 bg-gray-50 p-4 rounded-xl">
+                <div class="w-full sm:w-auto">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">부서 분류</label>
+                    <select id="calcDept" class="w-full sm:w-44 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-500">
+                        <option value="ALL">전체 부서</option>
+                    </select>
+                </div>
+                <div class="w-full sm:w-auto">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">상세 직군</label>
+                    <select id="calcJob" class="w-full sm:w-44 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-blue-500">
+                        <option value="ALL">전체 직군</option>
+                    </select>
+                </div>
+                <div class="w-full sm:w-auto">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">경력 (년차)</label>
+                    <input type="number" id="calcYear" placeholder="예: 4" min="0" class="w-full sm:w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="flex-1 min-w-[240px] bg-blue-600 p-3.5 rounded-xl text-white flex justify-between items-center shadow-sm">
+                    <div>
+                        <span class="text-xs opacity-80 font-medium">선택 조건 평균 연봉</span>
+                        <p class="text-2xl font-bold mt-0.5" id="calcResultSalary">0만원</p>
+                    </div>
+                    <div class="text-right border-l border-blue-400/40 pl-4">
+                        <span class="text-xs opacity-80">해당 인원</span>
+                        <p class="text-lg font-bold mt-0.5" id="calcResultCount">0명</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h3 class="text-md font-semibold mb-4">📢 유입 경로별 인원 분포</h3>
+                <div class="h-64"><canvas id="sourceChart"></canvas></div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h3 class="text-md font-semibold mb-4">🏢 소속별 인원 현황</h3>
+                <div class="h-64"><canvas id="entityChart"></canvas></div>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                <h3 class="text-md font-semibold text-gray-900">후보자 리스트 검색 및 조회</h3>
+                <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                    <input type="text" id="searchInput" placeholder="이름, 직군, 타이틀 검색..." class="flex-1 md:w-64 px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500">
+                    <select id="entityFilter" class="px-4 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none"><option value="ALL">전체 소속</option></select>
+                    <select id="deptFilter" class="px-4 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none"><option value="ALL">전체 부서</option></select>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase border-b border-gray-100">
+                            <th class="px-6 py-4">이름</th>
+                            <th class="px-6 py-4">소속 / 부서</th>
+                            <th class="px-6 py-4">직군 / 타이틀</th>
+                            <th class="px-6 py-4">유입 경로</th>
+                            <th class="px-6 py-4">경력</th>
+                            <th class="px-6 py-4">직전 연봉</th>
+                            <th class="px-6 py-4">입사 연봉</th>
+                            <th class="px-6 py-4">인상률</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-gray-100 text-sm">
+                        </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const csvUrl = "https://docs.google.com/spreadsheets/d/11vNiuXWR1B-0-w_hOUfEK1ba3AVD6iQKujei86K8_jU/pub?output=csv"; 
+
+        let globalData = []; 
+        let sourceChartInstance = null;
+        let entityChartInstance = null;
+
+        function parseCSV(text) {
+            const lines = text.split('\n');
+            return lines.map(line => {
+                let result = [];
+                let current = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    let char = line[i];
+                    if (char === '"') { inQuotes = !inQuotes; }
+                    else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
+                    else { current += char; }
+                }
+                result.push(current);
+                return result;
+            });
+        }
+
+        function parseCareer(val) {
+            if (!val || val.trim() === "") return { num: 0, text: '신입(0년)' };
+            const str = val.trim();
+            
+            const yearMatch = str.match(/(\d+)\s*년/);
+            const monthMatch = str.match(/(\d+)\s*개월/);
+            
+            let years = 0;
+            let months = 0;
+            
+            if (yearMatch) years = parseInt(yearMatch[1]);
+            if (monthMatch) months = parseInt(monthMatch[1]);
+            
+            if (!yearMatch && !monthMatch) {
+                const pureNum = parseFloat(str.replace(/[^0-9.-]/g, ''));
+                return isNaN(pureNum) ? { num: 0, text: str } : { num: pureNum, text: pureNum + '년' };
+            }
+            
+            const totalYears = years + (months / 12);
+            return { num: totalYears, text: str };
+        }
+
+        async function fetchSheetData() {
+            try {
+                const response = await fetch(csvUrl);
+                const csvText = await response.text();
+                const rawRows = parseCSV(csvText);
+
+                const parsedData = [];
+                
+                for (let i = 4; i < rawRows.length; i++) {
+                    const row = rawRows[i];
+                    
+                    if (!row[3] || row[3].trim() === "" || row[3].trim() === "이름") continue; 
+
+                    const num = (val) => parseInt(val?.replace(/[^0-9.-]/g, '')) || 0;
+
+                    const prevSalary = num(row[18]);
+                    const hiredSalary = num(row[19]);
+                    const increaseRate = prevSalary > 0 ? ((hiredSalary - prevSalary) / prevSalary * 100) : 0;
+                    
+                    const careerObj = parseCareer(row[17]);
+
+                    parsedData.push({
+                        name: row[3]?.trim(),
+                        entity: row[6]?.trim() || "미지정",
+                        dept: row[7]?.trim() || "미지정",
+                        jobGroup: row[8]?.trim() || "-",
+                        title: row[9]?.trim() || "-",
+                        source: row[12]?.trim() || "기타",
+                        experienceNum: careerObj.num,   
+                        experienceText: careerObj.text, 
+                        prevSalary: prevSalary,
+                        hiredSalary: hiredSalary,
+                        increaseRate: increaseRate
+                    });
+                }
+
+                globalData = parsedData;
+                setupFilterDropdowns(globalData);
+                setupCalcDropdowns(globalData); 
+                updateDashboard(globalData);
+                runCustomCalculator(); 
+
+                document.getElementById('sync-status').innerText = "실시간 동기화 완료";
+                document.getElementById('sync-status').className = "bg-green-50 text-green-600 px-4 py-2 rounded-full text-xs font-semibold";
+            } catch (error) {
+                console.error(error);
+                document.getElementById('sync-status').innerText = "데이터 로드 실패";
+                document.getElementById('sync-status').className = "bg-red-50 text-red-600 px-4 py-2 rounded-full text-xs font-semibold";
+            }
+        }
+
+        function setupFilterDropdowns(data) {
+            const entities = new Set(["ALL"]);
+            const depts = new Set(["ALL"]);
+            data.forEach(item => {
+                if(item.entity) entities.add(item.entity);
+                if(item.dept) depts.add(item.dept);
+            });
+            const entitySelect = document.getElementById('entityFilter');
+            entitySelect.innerHTML = '';
+            entities.forEach(ent => entitySelect.innerHTML += `<option value="${ent}">${ent === 'ALL' ? '전체 소속' : ent}</option>`);
+            const deptSelect = document.getElementById('deptFilter');
+            deptSelect.innerHTML = '';
+            depts.forEach(d => deptSelect.innerHTML += `<option value="${d}">${d === 'ALL' ? '전체 부서' : d}</option>`);
+        }
+
+        function setupCalcDropdowns(data) {
+            const depts = new Set();
+            const jobs = new Set();
+            data.forEach(item => {
+                if(item.dept && item.dept !== "미지정") depts.add(item.dept);
+                if(item.jobGroup && item.jobGroup !== "-") jobs.add(item.jobGroup);
+            });
+            const calcDept = document.getElementById('calcDept');
+            calcDept.innerHTML = '<option value="ALL">전체 부서</option>';
+            depts.forEach(d => calcDept.innerHTML += `<option value="${d}">${d}</option>`);
+
+            const calcJob = document.getElementById('calcJob');
+            calcJob.innerHTML = '<option value="ALL">전체 직군</option>';
+            jobs.forEach(j => calcJob.innerHTML += `<option value="${j}">${j}</option>`);
+        }
+
+        function runCustomCalculator() {
+            const targetDept = document.getElementById('calcDept').value;
+            const targetJob = document.getElementById('calcJob').value;
+            const targetYearStr = document.getElementById('calcYear').value;
+
+            const filtered = globalData.filter(item => {
+                const matchesDept = (targetDept === 'ALL' || item.dept === targetDept);
+                const matchesJob = (targetJob === 'ALL' || item.jobGroup === targetJob);
+                
+                let matchesYear = true;
+                if (targetYearStr !== "") {
+                    const targetYear = parseInt(targetYearStr);
+                    matchesYear = (Math.floor(item.experienceNum) === targetYear);
+                }
+                return matchesDept && matchesJob && matchesYear;
+            });
+
+            const count = filtered.length;
+            const avgSalary = count > 0 ? Math.round(filtered.reduce((sum, item) => sum + item.hiredSalary, 0) / count) : 0;
+
+            document.getElementById('calcResultSalary').innerText = count > 0 ? `${avgSalary.toLocaleString()}만원` : '데이터 없음';
+            document.getElementById('calcResultCount').innerText = `${count}명`;
+        }
+
+        function updateDashboard(data) {
+            const total = data.length;
+            const avgExp = total > 0 ? (data.reduce((sum, item) => sum + item.experienceNum, 0) / total).toFixed(1) : 0;
+            const avgHiredSalary = total > 0 ? Math.round(data.reduce((sum, item) => sum + item.hiredSalary, 0) / total) : 0;
+            
+            // 💡 핵심 로직 수정: 직전 연봉이 0보다 큰(즉, 경력직인) 데이터만 모아서 인상률 평균을 냅니다.
+            const experiencedCandidates = data.filter(item => item.prevSalary > 0);
+            const expCount = experiencedCandidates.length;
+            const avgIncrease = expCount > 0 
+                ? (experiencedCandidates.reduce((sum, item) => sum + item.increaseRate, 0) / expCount).toFixed(2) 
+                : "0.00";
+
+            document.getElementById('kpi-total').innerText = `${total}명`;
+            document.getElementById('kpi-avg-exp').innerText = `${avgExp}년`;
+            document.getElementById('kpi-avg-salary').innerText = `${avgHiredSalary.toLocaleString()}만원`;
+            document.getElementById('kpi-avg-increase').innerText = `${avgIncrease}%`;
+
+            renderTable(data);
+            renderCharts(data);
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            if(data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-gray-400">검색 조건에 맞는 데이터가 없습니다.</td></tr>`;
+                return;
+            }
+
+            data.forEach(item => {
+                const rateColor = item.increaseRate >= 20 ? 'text-red-500 font-bold' : item.increaseRate > 0 ? 'text-green-600' : 'text-gray-400';
+                const formattedRate = item.increaseRate > 0 ? '+' + item.increaseRate.toFixed(2) + '%' : item.increaseRate.toFixed(2) + '%';
+                
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-6 py-4 font-semibold text-gray-900">${item.name}</td>
+                        <td class="px-6 py-4"><span class="font-medium text-gray-700">${item.entity}</span> / <span class="text-gray-500">${item.dept}</span></td>
+                        <td class="px-6 py-4"><strong>${item.jobGroup}</strong> <span class="text-xs text-gray-400">(${item.title})</span></td>
+                        <td class="px-6 py-4 text-gray-600">${item.source}</td>
+                        <td class="px-6 py-4 font-medium text-purple-700">${item.experienceText}</td>
+                        <td class="px-6 py-4 text-gray-500">${item.prevSalary > 0 ? item.prevSalary.toLocaleString()+'만' : '-'}</td>
+                        <td class="px-6 py-4 font-semibold text-blue-600">${item.hiredSalary.toLocaleString()}만원</td>
+                        <td class="px-6 py-4 ${rateColor}">${formattedRate}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // 차트 렌더링 함수
+        function renderCharts(data) {
+            const sourceCounts = {};
+            const entityCounts = {};
+            data.forEach(item => {
+                sourceCounts[item.source] = (sourceCounts[item.source] || 0) + 1;
+                entityCounts[item.entity] = (entityCounts[item.entity] || 0) + 1;
+            });
+            if (sourceChartInstance) sourceChartInstance.destroy();
+            if (entityChartInstance) entityChartInstance.destroy();
+            sourceChartInstance = new Chart(document.getElementById('sourceChart'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(sourceCounts),
+                    datasets: [{ label: '인원 수', data: Object.values(sourceCounts), backgroundColor: '#3b82f6', borderRadius: 6 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+            entityChartInstance = new Chart(document.getElementById('entityChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(entityCounts),
+                    datasets: [{ data: Object.values(entityCounts), backgroundColor: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        function filterData() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const entity = document.getElementById('entityFilter').value;
+            const dept = document.getElementById('deptFilter').value;
+            const filtered = globalData.filter(item => {
+                const matchesSearch = item.name.toLowerCase().includes(search) || item.jobGroup.toLowerCase().includes(search) || item.title.toLowerCase().includes(search);
+                const matchesEntity = entity === 'ALL' || item.entity === entity;
+                const matchesDept = dept === 'ALL' || item.dept === dept;
+                return matchesSearch && matchesEntity && matchesDept;
+            });
+            updateDashboard(filtered);
+        }
+
+        document.getElementById('searchInput').addEventListener('input', filterData);
+        document.getElementById('entityFilter').addEventListener('change', filterData);
+        document.getElementById('deptFilter').addEventListener('change', filterData);
+
+        document.getElementById('calcDept').addEventListener('change', runCustomCalculator);
+        document.getElementById('calcJob').addEventListener('change', runCustomCalculator);
+        document.getElementById('calcYear').addEventListener('input', runCustomCalculator);
+
+        window.onload = fetchSheetData;
+    </script>
+</body>
+</html>
